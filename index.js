@@ -81,6 +81,7 @@ function copyFiles(args, config, callback) {
   var input = args.slice();
   var outDir = input.pop();
   var globOpts = {};
+  var fileList = [];
   if (config.exclude) {
     globOpts.ignore = config.exclude;
   }
@@ -105,7 +106,7 @@ function copyFiles(args, config, callback) {
       next();
     });
   }))
-  .on('error', callback)
+  .on('error', err => callback(err, fileList))
   .pipe(through(function (pathName, _, next) {
     fs.stat(pathName, function (err, pathStat) {
       if (err) {
@@ -144,7 +145,7 @@ function copyFiles(args, config, callback) {
       })
     });
   }))
-  .on('error', callback)
+  .on('error', err => callback(err, fileList))
   .pipe(through(function (obj, _, next) {
 
     if (!copied) {
@@ -155,13 +156,20 @@ function copyFiles(args, config, callback) {
     var outName = path.join(outDir, dealWith(pathName, opts));
     debug(`copy from: ${pathName}`)
     debug(`copy to: ${outName}`)
-    copyFile(pathName, outName, pathStat, next)
+    copyFile(pathName, outName, pathStat, err => {
+      fileList.push({
+        from: pathName,
+        to: outName,
+        success: !!!err,
+      });
+      next(err);
+    })
   }))
-  .on('error', callback)
+  .on('error', err => callback(err, fileList))
   .on('finish', function () {
     if (config.error && !copied) {
-      return callback(new Error('nothing coppied'));
+      return callback(new Error('nothing coppied'), fileList);
     }
-    callback();
+    callback(null, fileList);
   });
 }
